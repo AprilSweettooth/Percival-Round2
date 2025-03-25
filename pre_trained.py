@@ -2,7 +2,7 @@ import pytorch_lightning as pl
 import torch
 from torchmetrics.functional import accuracy
 import torchmetrics
-
+from vanilla import *
 from resnet import resnet18, resnet34, resnet50
 import math
 import warnings
@@ -11,7 +11,7 @@ from typing import List
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import _LRScheduler
 
-
+# from model import *
 class WarmupCosineLR(_LRScheduler):
     """
     Sets the learning rate of each parameter group to follow a linear warmup schedule
@@ -153,14 +153,18 @@ class WarmupCosineLR(_LRScheduler):
     
 
 class CIFAR10Module(pl.LightningModule):
-    def __init__(self,minst=False):
+    def __init__(self,minst=False,quantum=None,vanilla=False):
         super().__init__()
 
         self.criterion = torch.nn.CrossEntropyLoss()
         # self.accuracy = pl.metrics.functional.Accuracy()
         self.accuracy = accuracy
         self.minst = minst
-        self.model = resnet18(minst=self.minst)
+        self.quantum = quantum
+        if vanilla == False:
+            self.model = resnet18(minst=self.minst,q=self.quantum)
+        else:
+            self.model = MnistModel(minst=self.minst)
 
     # def accuracy(outputs, labels):
     #     _, preds = torch.max(outputs, dim = 1)
@@ -299,19 +303,20 @@ class CIFAR10Data(pl.LightningDataModule):
     def test_dataloader(self):
         return self.val_dataloader()
 
-trainer = Trainer(
-    fast_dev_run=False,
-    logger=TensorBoardLogger("cifar10", name='resnet18'),
-    deterministic=True,
-    log_every_n_steps=1,
-    max_epochs=100,
-    precision=32,
-)
+# trainer = Trainer(
+#     fast_dev_run=False,
+#     logger=TensorBoardLogger("cifar10", name='resnet18'),
+#     deterministic=True,
+#     log_every_n_steps=1,
+#     max_epochs=100,
+#     precision=32,
+# )
 
-model = CIFAR10Module()
-data = CIFAR10Data()
+# model = CIFAR10Module(vanilla=True)
+# data = CIFAR10Data()
 
+# trainer.fit(model, data.train_dataloader(), data.val_dataloader())
 
-model.model.load_state_dict(torch.load('state_dicts/resnet18.pt'))
-trainer.test(model, data.test_dataloader())
+# model.model.load_state_dict(torch.load('state_dicts/resnet18.pt'))
+# trainer.test(model, data.test_dataloader())
 
