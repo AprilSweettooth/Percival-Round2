@@ -11,6 +11,62 @@ import matplotlib.pyplot as plt
 ################
 
 # load the correct train, val dataset for the challenge, from the csv files
+
+import torch
+from torch.utils.data import DataLoader
+import os
+import pandas as pd
+import re
+
+class MNIST_partial2(Dataset):
+    def __init__(self, data='./data', transform=None, split='train', digits=[2, 5]):
+        """
+        Args:
+            data: Path to dataset folder containing train.csv and val.csv
+            transform: Optional transform to apply (e.g., normalization)
+            split: 'train' or 'val' to select dataset
+            digits: List of digits to filter (e.g., [2, 5])
+        """
+        self.data_dir = data
+        self.transform = transform
+        self.data = []
+        self.digits = digits
+        
+        if split == 'train':
+            filename = os.path.join(self.data_dir, 'train.csv')
+        elif split == 'val':
+            filename = os.path.join(self.data_dir, 'val.csv')
+        else:
+            raise AttributeError("split must be 'train' or 'val'")
+        
+        self.df = pd.read_csv(filename)
+
+        # Filter only the chosen digits
+        self.df = self.df[self.df['label'].isin(digits)].reset_index(drop=True)
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        img = self.df['image'].iloc[idx]
+        label = self.df['label'].iloc[idx]
+
+        # Convert label: Map chosen digits to {0, 1}
+        label = 0 if label == self.digits[0] else 1
+
+        # Convert image string to tensor
+        img_list = re.split(r',', img)
+        img_list[0] = img_list[0][1:]  # Remove '[' from first element
+        img_list[-1] = img_list[-1][:-1]  # Remove ']' from last element
+        img_float = [float(el) for el in img_list]
+        img_tensor = torch.tensor(img_float).view(1, 28, 28)  # Reshape to (1,28,28)
+
+        if self.transform is not None:
+            img_tensor = self.transform(img_tensor)
+
+        return img_tensor, label
+
+
 class MNIST_partial(Dataset):
     def __init__(self, data = './data', transform=None, split = 'train'):
         """
