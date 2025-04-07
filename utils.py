@@ -18,6 +18,92 @@ import os
 import pandas as pd
 import re
 
+import numpy as np
+import perceval as pcvl
+from pqnn_model import QuantumLayer, OutputMappingStrategy
+
+class MNIST_quantum(Dataset):
+    def __init__(self, data = './data', transform=None, split = 'train'):
+        """
+        Args:
+            data: path to dataset folder which contains train.csv and val.csv
+            transform (callable, optional): Optional transform to be applied
+                on a sample (e.g., data augmentation or normalization)
+            split: 'train' or 'val' to determine which set to download
+        """
+        self.data_dir = data
+        self.transform = transform
+        self.data = []
+        
+        if split == 'train':
+            filename = os.path.join(self.data_dir,'train.csv')
+        elif split == 'val':
+            filename = os.path.join(self.data_dir,'val.csv')
+        else:
+            raise AttributeError("split!='train' and split!='val': split must be train or val")
+        
+        self.df = pd.read_csv(filename)
+        
+    def quanv(self,image):
+        c = pcvl.Circuit(4)
+        c.add(0, pcvl.BS()//pcvl.PS(pcvl.P("x1"))//pcvl.BS(), merge=True)
+        c.add(2, pcvl.BS()//pcvl.PS(pcvl.P("x2"))//pcvl.BS()//pcvl.PS(pcvl.P("x3")), merge=True)
+        c.add(1, pcvl.BS()//pcvl.PS(pcvl.P("x4"))//pcvl.BS(), merge=True)
+        # pcvl.pdisplay(c)
+
+        # Create quantum layer
+        qlayer = QuantumLayer(
+            input_size=4,  # One input (x1)
+            output_size=4,
+            circuit=c,
+            # trainable_parameters=["theta1", "theta2", "theta3"],
+            input_state=[1, 0, 0, 0],
+            output_mapping_strategy=OutputMappingStrategy.NONE
+        )
+        """Convolves the input image with many applications of the same quantum circuit."""
+        out = np.zeros((14, 14, 4))
+
+        # Loop over the coordinates of the top-left pixel of 2X2 squares
+        for j in range(0, 28, 2):
+            for k in range(0, 28, 2):
+                # Process a squared 2x2 region of the image with a quantum circuit
+                # print(image.shape)
+                q_results = qlayer(
+                    torch.tensor([
+                        image[0, j, k],
+                        image[0, j, k + 1],
+                        image[0, j + 1, k],
+                        image[0, j + 1, k + 1]
+                    ]
+                ))
+                # Assign expectation values to different channels of the output pixel (j/2, k/2)
+                for c in range(4):
+                    out[j // 2, k // 2, c] = q_results[c]
+        return out
+
+    def __len__(self):
+        l = len(self.df['image'])
+        return l
+    
+    def __getitem__(self, idx):
+        img = self.df['image'].iloc[idx]
+        label = self.df['label'].iloc[idx]
+        # string to list
+        img_list = re.split(r',', img)
+        # remove '[' and ']'
+        img_list[0] = img_list[0][1:]
+        img_list[-1] = img_list[-1][:-1]
+        # convert to float
+        img_float = [float(el)/255 for el in img_list]
+        # convert to image
+        img_square = torch.unflatten(torch.tensor(img_float),0,(1,28,28))
+        if self.transform is not None:
+            img_square = self.transform(img_square)
+        # print(img_square.shape)
+        img_square = self.quanv(img_square)
+        img_square = torch.unflatten(torch.tensor(img_float),0,(1,28,28))
+        return img_square, label
+
 class MNIST_partial2(Dataset):
     def __init__(self, data='./data', transform=None, split='train', digits=[2, 5]):
         """
@@ -108,6 +194,7 @@ class MNIST_partial(Dataset):
         img_square = torch.unflatten(torch.tensor(img_float),0,(1,28,28))
         if self.transform is not None:
             img_square = self.transform(img_square)
+        # print(img_square.shape)
         return img_square, label
 
 
